@@ -25,7 +25,6 @@ function export_env_dir() {
 function indent() {
   sed -u 's/^/       /'
 }
-
 BUILD_DIR=${1:-}
 CACHE_DIR=${2:-}
 
@@ -33,12 +32,16 @@ export_env_dir "$3"
 
 # Create the cache directory if not exist.
 mkdir -p $CACHE_DIR
-
-cd $BUILD_DIR
+if [ -n "$FLUTTER_BUILD_DIR" ]; then
+  APP_DIR=$BUILD_DIR/$FLUTTER_BUILD_DIR
+else
+  APP_DIR=$BUILD_DIR
+fi
+cd "$APP_DIR"
 
 if [ -d "$CACHE_DIR/flutter" ]; then
   print "Restoring Flutter SDK from CACHE"
-  cp -R $CACHE_DIR/flutter $BUILD_DIR
+  cp -R $CACHE_DIR/flutter $APP_DIR
 else
   print "Installing SDK from Github repository."
   git clone https://github.com/flutter/flutter.git --quiet
@@ -92,9 +95,9 @@ mkdir -p $PUB_CACHE
 if [ -x flutter/bin/flutter ]; then
   print "Saving Flutter SDK in Cache"
   rm -rf $CACHE_DIR/flutter
-  cp -R $BUILD_DIR/flutter $CACHE_DIR/flutter
-  mv $BUILD_DIR/flutter/bin/cache/dart-sdk/ $BUILD_DIR
-  rm -rf $BUILD_DIR/flutter
+  cp -R $APP_DIR/flutter $CACHE_DIR/flutter
+  mv $APP_DIR/flutter/bin/cache/dart-sdk/ $APP_DIR
+  rm -rf $APP_DIR/flutter
 fi
 
 #  To read hidden directories and use move with exclusion.
@@ -103,11 +106,11 @@ shopt -s extglob
 # Check  FLUTTER_CLEANUP var to delete all files or keep it.
 if [ "$FLUTTER_CLEANUP" != false ]; then
 
-  mkdir -p $BUILD_DIR/TO_DELETE
+  mkdir -p $APP_DIR/TO_DELETE
 
   mv !("TO_DELETE") TO_DELETE
-  mv TO_DELETE/build/web/* $BUILD_DIR
-  mv TO_DELETE/dart-sdk $BUILD_DIR
+  mv TO_DELETE/build/web/* $APP_DIR
+  mv TO_DELETE/dart-sdk $APP_DIR
   rm -rf TO_DELETE
 
 fi
@@ -121,7 +124,7 @@ if [ -d "$CACHE_DIR/.pub-cache/" ]; then
   cp -R $CACHE_DIR/.pub-cache/* $PUB_CACHE
 else
   print "Getting dhttpd to run web service."
-  $BUILD_DIR/dart-sdk/bin/dart pub global activate -sgit https://github.com/diezep/dhttpd.git | indent
+  $APP_DIR/dart-sdk/bin/dart pub global activate -sgit https://github.com/diezep/dhttpd.git | indent
 
   print "Getting dhtppd to run web service."
   mkdir -p $CACHE_DIR/.pub-cache/
@@ -130,7 +133,14 @@ fi
 
 # Moving to the build, after running the compile. All will be deleted and removed to app directory.
 # Copying the result, the files will be kept in storage.
-cp -R $PUB_CACHE $BUILD_DIR
+cp -R $PUB_CACHE $APP_DIR
 
-export PATH="$PATH":"/app/dart-sdk/bin/"
-export PATH="$PATH":"/app/.pub-cache/bin"
+if [ -n "$FLUTTER_DEPLOY_DIR" ]; then
+  cp -r "$APP_DIR" "$BUILD_DIR/$FLUTTER_DEPLOY_DIR"
+fi
+
+# To see files size - we need to remove some flutter related builds to meet compression slug norms
+du -h -d 2 | sort -n
+
+export PATH="$PATH":"/$APP_DIR/dart-sdk/bin/"
+export PATH="$PATH":"/$APP_DIR/.pub-cache/bin"
