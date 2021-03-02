@@ -57,10 +57,15 @@ mkdir -p $DEPLOY_DIR
 if [ -d "$CACHE_DIR/.flutter" ]; then
   print "Restoring Flutter SDK from CACHE"
   cp -R $CACHE_DIR/.flutter $SOURCE_DIR
-  cp -R $CACHE_DIR/.pub-cache $SOURCE_DIR
 else
   print "Installing SDK from Github repository."
   git clone https://github.com/flutter/flutter.git .flutter --quiet
+fi
+
+# Restore the packages from cache
+if [ -d "$CACHE_DIR/.pub-cache" ]; then
+  print "Restoring pub.dev dependencies from CACHE"
+  cp -R $CACHE_DIR/.pub-cache $SOURCE_DIR
 fi
 
 # Create a directory for Dart packages
