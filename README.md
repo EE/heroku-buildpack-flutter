@@ -4,14 +4,14 @@ A configurable Heroku Buildpack with a light footprint. Designed to be easily pa
 ## Why Heroku Buildpack Flutter Light?
 This Buildpack was originally forked from Diego Zepeda's [Heroku Buildpack Flutter](https://github.com/diezep/heroku-buildpack-flutter). After testing, we realized that we needed to make different architectural tradeoffs than the original package. 
 
-The scope of our *Heroku Buildpack Flutter Light* is smaller. Unlike the original package, it is not concerned with serving the compiled files. It tests and compiles them but leaves serving them to other Buildpacks that are better suited for that purpose (that includes a very straightforward integration with Heroku's [heroku-buildpack-static](https://github.com/heroku/heroku-buildpack-static)).
+The scope of our *Heroku Buildpack Flutter Light* is smaller. Unlike the original package, it is not concerned with serving the compiled files. It tests and compiles them but leaves serving them via HTTP to other Buildpacks that are better suited for that purpose (that includes a very straightforward integration with Heroku's [heroku-buildpack-static](https://github.com/heroku/heroku-buildpack-static)).
 
 This means that the Buildpack is able to deploy only the compiled files, stripping Flutter SDK, Dart SDK, and all other dependencies. That in turn makes the deploys much faster and less likely to hit [Heroku's Slug size limit of 500 MB](https://devcenter.heroku.com/articles/slug-compiler#slug-size) (in our tests we went from being above the limit to having slugs smaller than 10 MB).
 
 Other key improvements include the [Heroku CI](https://devcenter.heroku.com/articles/heroku-ci) integration and the ability to configure the project structure (which includes support for repositories where the Flutter project isn't located directly in the root directory).
 
 ## Features
-✅ Ligh footprint (deploys only the compiled files, strippig all sources, tools, and dependencies) \
+✅ Light footprint (deploys only the compiled files, stripping all sources, tools, and dependencies) \
 ✅ Configurable directory structure \
 ✅ Heroku CI integration \
 ✅ Caching of dependencies (like Flutter, Dart, and pub.dev packages) between builds 
@@ -19,7 +19,7 @@ Other key improvements include the [Heroku CI](https://devcenter.heroku.com/arti
 ## Instalation
 ### With `heroku-buildpack-static` (recommended)
 
-Simply add the following two buildpacks in your app configuration (in this order):
+Simply add the following two Buildpacks in your app configuration (in this order):
 
 1. `https://github.com/ee/heroku-buildpack-flutter-light`
 2. `https://github.com/heroku/heroku-buildpack-static`
@@ -56,13 +56,13 @@ The `app.json` file should contain the app configuration, including the testing 
   },
   "buildpacks": [
     {
-      "url": "https://github.com/ludwiktrammer/heroku-buildpack-flutter"
+      "url": "https://github.com/ee/heroku-buildpack-flutter-light"
     }
   ],
 }
 ```
 
-Alternatively, for repositories where the Flutter project is not located in the root of the directory, the following configuration can be used (where `flutter-directory` is the location of the Flutter project):
+Alternatively, for repositories where the Flutter project is not located in the root of the repository, the following configuration can be used (where `flutter-directory` is the location of the Flutter project):
 
 ```
 {
@@ -75,7 +75,7 @@ Alternatively, for repositories where the Flutter project is not located in the 
   },
   "buildpacks": [
     {
-      "url": "https://github.com/ludwiktrammer/heroku-buildpack-flutter"
+      "url": "https://github.com/ee/heroku-buildpack-flutter-light"
     }
   ],
   "env": {
@@ -92,7 +92,7 @@ Optionally, you can use [config variables](https://devcenter.heroku.com/articles
 
 | Variable |  Default        |  Description
 |----------|------------------| -------------------|
-| FLUTTER_CLEANUP | `true` | Whether to emoves sources, tools, and dependencies before deployment |
+| FLUTTER_CLEANUP | `true` | Whether to remove sources, tools, and dependencies before deployment |
 | FLUTTER_VERSION | *Last version in [beta channel](https://flutter.dev/docs/development/tools/sdk/releases?tab=linux).* | The **name of the version** used to compile the project
 | FLUTTER_BUILD | `flutter build web --release --quiet` | The command used to build the project | 
 | FLUTTER_SOURCE_DIR | `/` | The folder in your repository where the Flutter project is kept |
