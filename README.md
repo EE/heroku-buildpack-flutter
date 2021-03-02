@@ -1,67 +1,99 @@
-# Heroku Buildpack for Flutter
-![header](https://user-images.githubusercontent.com/38699812/89092029-fb5b8400-d373-11ea-8ac0-6a46c817ae3b.png)
-Automate your deployments on Heroku easily.
+# Heroku Buildpack Flutter Light 🪶
+A configurable Heroku Buildpack with a light footprint. Designed to be easily paired with other Buildpacks and integrated into existing projects.
 
-## 🔨 Setup
+## Why Heroku Buildpack Flutter Light?
+This Buildpack was originally forked from Diego Zepeda's [Heroku Buildpack Flutter](https://github.com/diezep/heroku-buildpack-flutter). After testing, we realized that we needed to make different architectural tradeoffs than the original package. 
 
-#### Add this Buildpack in your Heroku app 
-   In dashboard:
-   
-   You can copy the [link](https://github.com/diezep/heroku-buildpack-flutter) of this repository and paste it in buildpacks or write **diezep/flutter** and will be added automatically.
-   
-   In Heroku CLI:
-   ```shellscript
-   $ heroku buildpacks:set diezep/flutter -a <Heroku App name>
-   ```
+The scope of our *Heroku Buildpack Flutter Light* is smaller. Unlike the original package, it is not concerned with serving the compiled files. It tests and compiles them but leaves serving them to other Buildpacks that are better suited for that purpose (that includes a very straightforward integration with Heroku's [heroku-buildpack-static](https://github.com/heroku/heroku-buildpack-static)).
 
-#### Optional
+This means that the Buildpack is able to deploy only the compiled files, stripping Flutter SDK, Dart SDK, and all other dependencies. That in turn makes the deploys much faster and less likely to hit [Heroku's Slug size limit of 500 MB](https://devcenter.heroku.com/articles/slug-compiler#slug-size) (in our tests we went from being above the limit to having slugs smaller than 10 MB).
 
-   You can add optional [environment variables](#-environment-variables) to customize the deployment of your project but nothing is required, all are optional.
-   
-#### Problems to compile
-  By default, this buildpack get the **last version** of Flutter automatically, sometimes because is on beta channel, that version may have problems to compile a project with web support in cloud services.
-  
-  If this is your case, you can try downgrade the Flutter version manually, add FLUTTER_VERSION variable in your Heroku environment with the number of the version that are currently working web support. 
-  
-## 🚩 TODO :
+Other key improvements include the [Heroku CI](https://devcenter.heroku.com/articles/heroku-ci) integration and the ability to configure the project structure (which includes support for repositories where the Flutter project isn't located directly in the root directory).
 
-### Environment variables :
+## Features
+✅ Ligh footprint (deploys only the compiled files, strippig all sources, tools, and dependencies) \
+✅ Configurable directory structure \
+✅ Heroku CI integration \
+✅ Caching of dependencies (like Flutter, Dart, and pub.dev packages) between builds 
 
-* [x] VERSION to set the name of custom version of Flutter.
-* [x] CLEANUP to remove uneccessary files after the build.
-* [ ] CACHE to remove and download every file its need to compile the project in every deploy.
-* [ ] SUBDIR to ubicate the project if it isn't in a root directory.
+## Instalation
+### With `heroku-buildpack-static` (recommended)
 
-### Features :
+Simply add the following two buildpacks in your app configuration (in this order):
 
-* [x] No more PHP Buildpack needed.
-* [x] Save and restore Flutter and Dart SDK in cache.
-* [x] Save and restore [dhttpd](https://github.com/diezep/dhttpd) in cache.
-* [ ] Save and restore project dependencies needed in cache.
+1. `https://github.com/ee/heroku-buildpack-flutter-light`
+2. `https://github.com/heroku/heroku-buildpack-static`
 
-## 🚧 Environment variables:
+You can do this using the web interface (in the "Settings" tab) or with the [`heroku buildpacks:set`](https://devcenter.heroku.com/articles/buildpacks#setting-a-buildpack-on-an-application) command.
 
-All variables were built following the structure **FLUTTER_VARNAME** to identified easily in Heroku configurations. If you want to use some variable, remember **use the structure** following to the variable.
+After deploying you should see your Flutter Web application. You can optionally customize the way the application is built and deployed using [Heroku Buildpack Flutter Light's options](#options) and [heroku-buidlpack-static's configuration](https://github.com/heroku/heroku-buildpack-static#configuration).
 
-| Variable |   Type  |   Default        |  Description
-|----------|---------|------------------| -------------------|
-| CLEANUP  | *boolean* |  <center>true</center> |Remove **uneccessary files** of your project after the compile. |
-|  VERSION | <center>*string*</center> | *Last version in [beta channel](https://flutter.dev/docs/development/tools/sdk/releases?tab=linux).* | The **name of the version** you want to use to compile the project.
-|  BUILD | <center>*string*</center> | <center>flutter build web --release --quiet</center> | Customize the **command to compile** the project.| 
+### With a different server-side technology (advanced)
 
-### Set variable
-   Example of setting CLEANUP var in Heroku CLI:
-   ```shellscript
-   $ heroku config:set FLUTTER_CLEANUP=true -a project-name
-   ```
-### Example
+If your Flutter application is a part of a bigger project that already has its way of serving static files (for example with Node, Python, PHP, or Ruby), you can easily reuse it.
 
-The next image is an example of setting environment variables following the structure mentioned above :
+Add `https://github.com/ee/heroku-buildpack-flutter-light` to your Buildpacks, set `FLUTTER_SOURCE_DIR` to the directory (within your repository) where the Flutter project is located, and `FLUTTER_DEPLOY_DIR` to where the compiled application should be placed (i.e., a directory that your framework uses to serve static files).
 
-![example_use_in_variables](https://user-images.githubusercontent.com/38699812/89090700-42447c00-d36a-11ea-8148-84af7cddfa21.PNG)
+## Heroku CI integration
+The Buildpack can be easily integrated with Heroku's Continuous Integration service ([Heroku CI](https://devcenter.heroku.com/articles/heroku-ci)) to automatically run linters and tests. 
 
-<!-- TODO: ## 📌 LICENCE -->
-<!-- TODO: ## 📌 CONTRIBUTE -->
+Use the following steps:
 
-## 📝 Final note
-   This buildpack is unofficial that means i don't have any conection with Heroku or Google from Flutter developer team <!--Although I would like belonging to any of the two :D -->. This repository was made as a hobby, i'm always interested in learn new things, this is one demostration of that :)
+1. Create a Heroku [pipleine](https://devcenter.heroku.com/articles/pipelines)
+2. Enable Heroku CI in the pipeline's configuration
+3. Create an `app.json` file in the root of your repository
+
+The `app.json` file should contain the app configuration, including the testing command that should be run by Heroku CI. All `app.json` options can be found in [Heroku's `app.json` documentation](https://devcenter.heroku.com/articles/app-json-schema). What follows is a very minimalistic (but working) `app.json` that runs Dart's built-in analyzer and your project's Flutter tests:
+
+```
+{
+  "environments": {
+    "test": {
+      "scripts": {
+        "test": "flutter analyze && flutter test"
+      }
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "https://github.com/ludwiktrammer/heroku-buildpack-flutter"
+    }
+  ],
+}
+```
+
+Alternatively, for repositories where the Flutter project is not located in the root of the directory, the following configuration can be used (where `flutter-directory` is the location of the Flutter project):
+
+```
+{
+  "environments": {
+    "test": {
+      "scripts": {
+        "test": "cd flutter-directory && flutter analyze && flutter test"
+      }
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "https://github.com/ludwiktrammer/heroku-buildpack-flutter"
+    }
+  ],
+  "env": {
+    "FLUTTER_SOURCE_DIR": "flutter-directory"
+  }
+}
+```
+
+During tests, all your project's dependencies are present (including the Dart SDK, Flutter SDK, pub.dev requirements, and command-line tools), so you can use them when specifying the testing command. 
+
+#### Options
+
+Optionally, you can use [config variables](https://devcenter.heroku.com/articles/config-vars) to customize the Buildpack's behavior:
+
+| Variable |  Default        |  Description
+|----------|------------------| -------------------|
+| FLUTTER_CLEANUP | `true` | Whether to emoves sources, tools, and dependencies before deployment |
+| FLUTTER_VERSION | *Last version in [beta channel](https://flutter.dev/docs/development/tools/sdk/releases?tab=linux).* | The **name of the version** used to compile the project
+| FLUTTER_BUILD | `flutter build web --release --quiet` | The command used to build the project | 
+| FLUTTER_SOURCE_DIR | `/` | The folder in your repository where the Flutter project is kept |
+| FLUTTER_DEPLOY_DIR | `public_html` | The folder where the compiled app should be placed |

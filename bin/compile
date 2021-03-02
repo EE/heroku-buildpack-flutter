@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # bin/compile <build-dir> <cache-dir> <env-dir>
 
+#  To read hidden directories and use move with exclusion.
+shopt -s dotglob extglob
+
+# Stop execution affter encountering a problem
 set -e
 unset GIT_DIR
 
@@ -32,54 +36,70 @@ export_env_dir "$3"
 
 # Create the cache directory if not exist.
 mkdir -p $CACHE_DIR
-if [ -n "$FLUTTER_BUILD_DIR" ]; then
-  APP_DIR=$BUILD_DIR/$FLUTTER_BUILD_DIR
-else
-  APP_DIR=$BUILD_DIR
-fi
-cd "$APP_DIR"
 
-if [ -d "$CACHE_DIR/flutter" ]; then
+# Get the source dir
+if [ -n "$FLUTTER_SOURCE_DIR" ]; then
+  SOURCE_DIR=$BUILD_DIR/$FLUTTER_SOURCE_DIR
+else
+  SOURCE_DIR=$BUILD_DIR
+fi
+cd "$SOURCE_DIR"
+
+# Get the deploy build
+if [ -n "$FLUTTER_DEPLOY_DIR" ]; then
+  DEPLOY_DIR=$BUILD_DIR/$FLUTTER_DEPLOY_DIR
+else
+  DEPLOY_DIR=$BUILD_DIR/public_html
+fi
+mkdir -p $DEPLOY_DIR
+
+# Restore Flutter SDK from cache
+if [ -d "$CACHE_DIR/.flutter" ]; then
   print "Restoring Flutter SDK from CACHE"
-  cp -R $CACHE_DIR/flutter $APP_DIR
+  cp -R $CACHE_DIR/.flutter $SOURCE_DIR
+  cp -R $CACHE_DIR/.pub-cache $SOURCE_DIR
 else
   print "Installing SDK from Github repository."
-  git clone https://github.com/flutter/flutter.git --quiet
+  git clone https://github.com/flutter/flutter.git .flutter --quiet
 fi
+
+# Create a directory for Dart packages
+PUB_CACHE="$SOURCE_DIR/.pub-cache/"
+mkdir -p $PUB_CACHE
 
 # Check if FLUTTER_VERSION variables is set.
 if [ -n "$FLUTTER_VERSION" ]; then
   # Load bash variables from flutter --machine --version and read it like  $FLUTTER_VERSION variable.
-  flutter/bin/flutter --machine --version >flutter.json
-  FLUTTER_INSTALLED_VERSION=$(grep -o '"frameworkVersion": *"[^"]*' flutter.json | grep -o '[^"]*$')
+  .flutter/bin/flutter --machine --version > .flutter.json
+  FLUTTER_INSTALLED_VERSION=$(grep -o '"frameworkVersion": *"[^"]*' .flutter.json | grep -o '[^"]*$')
 
   # Check if the FLUTTER_VERSION is the same with the installed one.
   if [ "$FLUTTER_VERSION" != "$FLUTTER_INSTALLED_VERSION" ]; then
     print "Installing Flutter SDK version : $FLUTTER_VERSION"
-    flutter/bin/flutter version $FLUTTER_VERSION --quiet | indent
+    .flutter/bin/flutter version $FLUTTER_VERSION --quiet | indent
   fi
-  rm flutter.json
+  rm .flutter.json
 
 else
 
   print "Running flutter upgrade command"
   if [ "$channel" != "beta" ]; then
-    flutter/bin/flutter channel beta | indent
+    .flutter/bin/flutter channel beta | indent
   fi
 
-  flutter/bin/flutter upgrade --quiet | indent
+  .flutter/bin/flutter upgrade --quiet | indent
 fi
 
 print "Enabling Web support"
-flutter/bin/flutter config --enable-web --quiet | indent
+.flutter/bin/flutter config --enable-web --quiet | indent
 
 print "Running flutter clean command."
-flutter/bin/flutter clean --quiet | indent
+.flutter/bin/flutter clean --quiet | indent
 
 print "Getting packages from Flutter project"
-flutter/bin/flutter pub get --quiet | indent
+.flutter/bin/flutter pub get --quiet | indent
 
-PATH="$PATH":"$(pwd)/flutter/bin/"
+PATH="$PATH":"$(pwd)/.flutter/bin/"
 
 if [ -z "$FLUTTER_BUILD" ]; then
   FLUTTER_BUILD="flutter build web --release --quiet"
@@ -88,59 +108,42 @@ fi
 print "Compiling the project with $FLUTTER_BUILD"
 eval $FLUTTER_BUILD | indent
 
-PUB_CACHE="$HOME/.pub-cache/"
-mkdir -p $PUB_CACHE
-
-# Saving SDK in Cache and in app.
-if [ -x flutter/bin/flutter ]; then
+# Saving SDK in Cache
+if [ -x .flutter/bin/flutter ]; then
   print "Saving Flutter SDK in Cache"
-  rm -rf $CACHE_DIR/flutter
-  cp -R $APP_DIR/flutter $CACHE_DIR/flutter
-  mv $APP_DIR/flutter/bin/cache/dart-sdk/ $APP_DIR
-  rm -rf $APP_DIR/flutter
-fi
+  rm -rf $CACHE_DIR/.flutter
+  rm -rf $CACHE_DIR/.pub-cache
 
-#  To read hidden directories and use move with exclusion.
-shopt -s extglob
+  cp -R $SOURCE_DIR/.flutter $CACHE_DIR/.flutter
+  cp -R $SOURCE_DIR/.pub-cache $CACHE_DIR/.pub-cache
+fi
 
 # Check  FLUTTER_CLEANUP var to delete all files or keep it.
 if [ "$FLUTTER_CLEANUP" != false ]; then
+  print "Cleaning up Flutter source files and the SDK"
 
-  mkdir -p $APP_DIR/TO_DELETE
+  mkdir -p $SOURCE_DIR/TO_DELETE
 
   mv !("TO_DELETE") TO_DELETE
-  mv TO_DELETE/build/web/* $APP_DIR
-  mv TO_DELETE/dart-sdk $APP_DIR
+  mv TO_DELETE/build/web/* $DEPLOY_DIR
+
   rm -rf TO_DELETE
-
 fi
 
-# Activate dhttpd dart package to run the server.
-# Is taken from my Github repo because some variables need to be changed every run
-# like PORT from environment.
-
-if [ -d "$CACHE_DIR/.pub-cache/" ]; then
-  print "dhttpd Found in cache. Restoring."
-  cp -R $CACHE_DIR/.pub-cache/* $PUB_CACHE
-else
-  print "Getting dhttpd to run web service."
-  $APP_DIR/dart-sdk/bin/dart pub global activate -sgit https://github.com/diezep/dhttpd.git | indent
-
-  print "Getting dhtppd to run web service."
-  mkdir -p $CACHE_DIR/.pub-cache/
-  cp -R $PUB_CACHE/* $CACHE_DIR/.pub-cache/
+# heroku-buildpac-static compatibility
+if [ ! -f $BUILD_DIR/static.json ]; then
+  echo "{}" > $BUILD_DIR/static.json
 fi
 
-# Moving to the build, after running the compile. All will be deleted and removed to app directory.
-# Copying the result, the files will be kept in storage.
-cp -R $PUB_CACHE $APP_DIR
+if [ "$FLUTTER_CLEANUP" == false ]; then
+  print "Setting up the Dart & Flutter command line tools"
 
-if [ -n "$FLUTTER_DEPLOY_DIR" ]; then
-  cp -r "$APP_DIR" "$BUILD_DIR/$FLUTTER_DEPLOY_DIR"
+  # Create a profile.d script so that CLI commands are in PATH
+  # See https://devcenter.heroku.com/articles/buildpack-api#profile-d-scripts
+  mkdir -p $BUILD_DIR/.profile.d
+  cat <<EOT >> "$BUILD_DIR/.profile.d/flutter.sh"
+export PATH=\$PATH:$SOURCE_DIR/.flutter/bin/
+export PATH=\$PATH:$SOURCE_DIR/.flutter/bin/cache/dart-sdk/bin/
+export PATH=\$PATH:$SOURCE_DIR/.pub-cache/bin
+EOT
 fi
-
-# To see files size - we need to remove some flutter related builds to meet compression slug norms
-du -h -d 2 | sort -n
-
-export PATH="$PATH":"/$APP_DIR/dart-sdk/bin/"
-export PATH="$PATH":"/$APP_DIR/.pub-cache/bin"

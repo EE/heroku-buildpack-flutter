@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+BIN_DIR=$(cd "$(dirname "$0")"; pwd)
+FLUTTER_CLEANUP=false "$BIN_DIR/compile" "$1" "$2" "$3"
