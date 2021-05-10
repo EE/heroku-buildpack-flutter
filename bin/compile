@@ -41,7 +41,10 @@ mkdir -p $CACHE_DIR
 if [ -n "$FLUTTER_SOURCE_DIR" ]; then
   SOURCE_DIR=$BUILD_DIR/$FLUTTER_SOURCE_DIR
 else
-  SOURCE_DIR=$BUILD_DIR
+  SOURCE_DIR=$BUILD_DIR/src
+  mkdir -p $BUILD_DIR/src
+  cd $BUILD_DIR
+  mv !("src") $SOURCE_DIR
 fi
 cd "$SOURCE_DIR"
 
@@ -123,24 +126,17 @@ if [ -x .flutter/bin/flutter ]; then
   cp -R $SOURCE_DIR/.pub-cache $CACHE_DIR/.pub-cache
 fi
 
+# Move built website inside deploy dir before cleaning files
+mv $SOURCE_DIR/build/web/* $DEPLOY_DIR
+
 # Check  FLUTTER_CLEANUP var to delete all files or keep it.
 if [ "$FLUTTER_CLEANUP" != false ]; then
   print "Cleaning up Flutter source files and the SDK"
 
-  mkdir -p $SOURCE_DIR/TO_DELETE
+  rm -rf $SOURCE_DIR 
 
-  mv !("TO_DELETE") TO_DELETE
-  mv TO_DELETE/build/web/* $DEPLOY_DIR
+else
 
-  rm -rf TO_DELETE
-fi
-
-# heroku-buildpac-static compatibility
-if [ ! -f $BUILD_DIR/static.json ]; then
-  echo "{}" > $BUILD_DIR/static.json
-fi
-
-if [ "$FLUTTER_CLEANUP" == false ]; then
   print "Setting up the Dart & Flutter command line tools"
 
   # Create a profile.d script so that CLI commands are in PATH
@@ -151,4 +147,9 @@ export PATH=\$PATH:$SOURCE_DIR/.flutter/bin/
 export PATH=\$PATH:$SOURCE_DIR/.flutter/bin/cache/dart-sdk/bin/
 export PATH=\$PATH:$SOURCE_DIR/.pub-cache/bin
 EOT
+fi
+
+# heroku-buildpac-static compatibility
+if [ ! -f $BUILD_DIR/static.json ]; then
+  echo "{}" > $BUILD_DIR/static.json
 fi
