@@ -118,7 +118,7 @@ if [ "$FLUTTER_CLEANUP" != false ]; then
 
   mkdir -p $SOURCE_DIR/TO_DELETE
 
-  mv !("TO_DELETE"|"build") TO_DELETE
+  mv !("TO_DELETE"|"build"|"static.json") TO_DELETE
   rm -rf TO_DELETE
 fi
 
